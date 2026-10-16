@@ -1,0 +1,21 @@
+CREATE TABLE IF NOT EXISTS clicks (
+    id SERIAL PRIMARY KEY,
+    count INTEGER DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS upgrades (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(100) UNIQUE NOT NULL,
+    multiplier INTEGER DEFAULT 1,
+    cost INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS sessions (
+    id SERIAL PRIMARY KEY,
+    player VARCHAR(100) DEFAULT 'guest',
+    clicks_made INTEGER DEFAULT 0,
+    started_at TIMESTAMP DEFAULT NOW(),
+    ended_at TIMESTAMP
+);
+
+INSERT INTO clicks (count) SELECT 0 WHERE NOT EXISTS (SELECT 1 FROM clicks);

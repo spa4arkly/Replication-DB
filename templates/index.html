@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clicker Neon</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #0f0f0f;
+            color: #e0e0e0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            user-select: none;
+            padding: 40px 20px;
+        }
+
+        .container { text-align: center; max-width: 520px; width: 100%; }
+
+        .count {
+            font-size: 96px;
+            font-weight: 200;
+            color: #00d4aa;
+            line-height: 1;
+            margin-bottom: 8px;
+            transition: transform 0.1s ease;
+        }
+
+        .count.bump { transform: scale(1.1); }
+
+        .label {
+            font-size: 14px;
+            color: #666;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            margin-bottom: 32px;
+        }
+
+        .click-btn {
+            width: 160px;
+            height: 160px;
+            border-radius: 50%;
+            border: 3px solid #00d4aa;
+            background: rgba(0, 212, 170, 0.06);
+            color: #00d4aa;
+            font-size: 20px;
+            font-weight: 700;
+            letter-spacing: 0.03em;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            outline: none;
+        }
+
+        .click-btn:hover { background: rgba(0, 212, 170, 0.12); }
+
+        .click-btn:active {
+            transform: scale(0.95);
+            background: rgba(0, 212, 170, 0.2);
+        }
+
+        .click-btn:disabled { opacity: 0.4; cursor: wait; }
+
+        .status {
+            margin-top: 16px;
+            font-size: 12px;
+            color: #666;
+            min-height: 16px;
+        }
+
+        .status.error { color: #ff5555; }
+
+        .shop { margin-top: 40px; text-align: left; }
+
+        .shop h2 {
+            font-size: 12px;
+            color: #00d4aa;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            margin-bottom: 16px;
+            font-weight: 400;
+            text-align: center;
+        }
+
+        .shop-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 16px;
+            border: 1px solid #222;
+            border-radius: 10px;
+            margin-bottom: 8px;
+            background: #141414;
+            transition: border-color 0.15s ease;
+        }
+
+        .shop-item.owned { opacity: 0.4; }
+
+        .shop-item .info {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .shop-item .name { font-size: 14px; color: #e0e0e0; }
+        .shop-item .mult { font-size: 11px; color: #00d4aa; }
+
+        .buy-btn {
+            background: transparent;
+            border: 1px solid #00d4aa;
+            color: #00d4aa;
+            padding: 6px 14px;
+            border-radius: 6px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .buy-btn:hover:not(:disabled) { background: rgba(0, 212, 170, 0.12); }
+
+        .buy-btn:disabled {
+            border-color: #333;
+            color: #444;
+            cursor: not-allowed;
+        }
+
+        .session {
+            margin-top: 24px;
+            font-size: 12px;
+            color: #00d4aa;
+            letter-spacing: 0.05em;
+        }
+
+        .author {
+            margin-top: 8px;
+            font-size: 11px;
+            color: #00d4aa;
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            opacity: 0.6;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="count" id="count">—</div>
+        <div class="label">Clicks</div>
+        <button class="click-btn" id="btn">Tap</button>
+        <div class="status" id="status"></div>
+
+        <div class="shop">
+            <h2>Upgrades</h2>
+            <div id="shop-items"></div>
+        </div>
+
+        <div class="session" id="session"></div>
+        <div class="author">Pyatykh · И-307а</div>
+    </div>
+
+    <script>
+        const btn = document.getElementById('btn');
+        const countEl = document.getElementById('count');
+        const statusEl = document.getElementById('status');
+        const shopEl = document.getElementById('shop-items');
+        const sessionEl = document.getElementById('session');
+
+        let busy = false;
+        let currentCount = 0;
+
+        function setStatus(text, isError = false) {
+            statusEl.textContent = text;
+            statusEl.className = isError ? 'status error' : 'status';
+        }
+
+        async function loadAll() {
+            try {
+                const res = await fetch('/api/all');
+                const data = await res.json();
+
+                if (data.count !== null && data.count !== undefined) {
+                    currentCount = data.count;
+                    countEl.textContent = data.count;
+                }
+
+                sessionEl.textContent =
+                    `Session: ${data.session_clicks} · Multiplier: ×${data.multiplier}`;
+
+                renderUpgrades(data.available || [], data.purchased || []);
+
+                setStatus(data.partial ? 'часть данных не загрузилась' : '');
+            } catch (e) {
+                setStatus('Ошибка загрузки: ' + e.message, true);
+            }
+        }
+
+        function renderUpgrades(available, purchased) {
+            shopEl.innerHTML = '';
+
+            available.forEach(u => {
+                const row = document.createElement('div');
+                row.className = 'shop-item';
+                row.innerHTML = `
+                    <div class="info">
+                        <span class="name">${u.name}</span>
+                        <span class="mult">×${u.multiplier} к клику</span>
+                    </div>
+                `;
+                const buy = document.createElement('button');
+                buy.className = 'buy-btn';
+                buy.textContent = `${u.cost} очков`;
+                buy.disabled = currentCount < u.cost;
+                buy.onclick = () => buyUpgrade(u.name);
+                row.appendChild(buy);
+                shopEl.appendChild(row);
+            });
+
+            purchased.forEach(name => {
+                const row = document.createElement('div');
+                row.className = 'shop-item owned';
+                row.innerHTML = `
+                    <div class="info">
+                        <span class="name">${name}</span>
+                        <span class="mult">куплено</span>
+                    </div>
+                `;
+                shopEl.appendChild(row);
+            });
+        }
+
+        async function increment() {
+            if (busy) return;
+            busy = true;
+            btn.disabled = true;
+
+            try {
+                const res = await fetch('/api/increment', { method: 'POST' });
+                const data = await res.json();
+                if (!res.ok || data.error) throw new Error(data.error || `HTTP ${res.status}`);
+
+                currentCount = data.count;
+                countEl.textContent = data.count;
+                countEl.classList.add('bump');
+                setTimeout(() => countEl.classList.remove('bump'), 100);
+
+                setStatus(`OK · +${data.gain}`);
+                await loadAll();
+            } catch (e) {
+                setStatus(e.message, true);
+            } finally {
+                busy = false;
+                btn.disabled = false;
+            }
+        }
+
+        async function buyUpgrade(name) {
+            try {
+                const res = await fetch('/api/buy', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name })
+                });
+                const data = await res.json();
+                if (!res.ok || data.error) {
+                    throw new Error(data.error || `HTTP ${res.status}`);
+                }
+
+                currentCount = data.count;
+                countEl.textContent = data.count;
+                setStatus('Куплено: ' + name);
+
+                await loadAll();
+            } catch (e) {
+                setStatus(e.message, true);
+            }
+        }
+
+        btn.addEventListener('click', increment);
+
+        (async () => {
+            await loadAll();
+        })();
+    </script>
+</body>
+</html>

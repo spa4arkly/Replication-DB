@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  postgres-primary:
+    image: postgres:16
+    container_name: postgres-primary
+    environment:
+      POSTGRES_USER: repl_user
+      POSTGRES_PASSWORD: repl_pass
+      POSTGRES_DB: clicker_db
+    ports:
+      - "5432:5432"
+    command: >
+      -c wal_level=logical
+      -c max_wal_senders=8
+      -c max_replication_slots=8
+    volumes:
+      - primary_data:/var/lib/postgresql/data
+      - ./postgres-init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U repl_user -d clicker_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  postgres-replica:
+    image: postgres:16
+    container_name: postgres-replica
+    environment:
+      POSTGRES_USER: repl_user
+      POSTGRES_PASSWORD: repl_pass
+      POSTGRES_DB: clicker_db
+    ports:
+      - "5433:5432"
+    volumes:
+      - replica_data:/var/lib/postgresql/data
+      - ./postgres-init:/docker-entrypoint-initdb.d
+    depends_on:
+      postgres-primary:
+        condition: service_healthy
+
+volumes:
+  primary_data:
+  replica_data:
